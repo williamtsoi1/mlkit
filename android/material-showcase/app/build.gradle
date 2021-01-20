@@ -15,6 +15,13 @@ android {
         multiDexEnabled true
     }
     buildTypes {
+        buildTypes.each {
+            it.buildConfigField 'String', 'GOOGLE_CLOUD_API_KEY', GoogleCloudApiKey
+            it.buildConfigField 'String', 'GOOGLE_CLOUD_PROJECT', GoogleCloudProject
+            it.buildConfigField 'String', 'GOOGLE_CLOUD_REGION', GoogleCloudRegion
+            it.buildConfigField 'String', 'GOOGLE_CLOUD_VISION_PRODUCT_SET', GoogleCloudVisionProductSet
+            it.buildConfigField 'String', 'GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY', GoogleCloudVisionProductCategory
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -59,6 +66,13 @@ dependencies {
     implementation 'com.google.mlkit:object-detection:16.2.1'
     // Custom model
     implementation 'com.google.mlkit:object-detection-custom:16.2.1'
+
+    // GCP SDK
+    implementation 'com.google.cloud:google-cloud-vision:1.100.10'
+    implementation 'com.google.apis:google-api-services-vision:v1-rev451-1.25.0'
+
+    compile 'com.google.api-client:google-api-client-android:1.23.0' exclude module: 'httpclient'
+    compile 'com.google.http-client:google-http-client-gson:1.23.0' exclude module: 'httpclient'
 
     api 'com.google.guava:guava:27.1-jre'
 }

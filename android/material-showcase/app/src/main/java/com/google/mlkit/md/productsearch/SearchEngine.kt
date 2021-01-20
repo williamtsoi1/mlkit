@@ -19,28 +19,52 @@ package com.google.mlkit.md.productsearch
 import android.content.Context
 import android.util.Log
 import com.android.volley.RequestQueue
-import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.gms.tasks.Tasks
+import com.google.api.client.extensions.android.http.AndroidHttp
+import com.google.api.client.json.gson.GsonFactory
+import com.google.api.services.vision.v1.Vision
+import com.google.api.services.vision.v1.VisionRequestInitializer
+import com.google.api.services.vision.v1.model.AnnotateImageRequest
+import com.google.api.services.vision.v1.model.BatchAnnotateImagesRequest
+import com.google.api.services.vision.v1.model.Feature
+import com.google.api.services.vision.v1.model.Image
+import com.google.api.services.vision.v1.model.ImageContext
+import com.google.api.services.vision.v1.model.ProductSearchParams
+import com.google.api.services.vision.v1.model.Result
+import com.google.cloud.vision.v1.ProductSetName
+import com.google.mlkit.md.BuildConfig
 import com.google.mlkit.md.objectdetection.DetectedObjectInfo
-import java.util.ArrayList
+import com.google.protobuf.ByteString
+import java.util.*
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.collections.ArrayList
+
 
 /** A fake search engine to help simulate the complete work flow.  */
 class SearchEngine(context: Context) {
 
     private val searchRequestQueue: RequestQueue = Volley.newRequestQueue(context)
     private val requestCreationExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-
     fun search(
         detectedObject: DetectedObjectInfo,
         listener: (detectedObject: DetectedObjectInfo, productList: List<Product>) -> Unit
     ) {
         // Crops the object image out of the full image is expensive, so do it off the UI thread.
-        Tasks.call<JsonObjectRequest>(requestCreationExecutor, Callable { createRequest(detectedObject) })
-            .addOnSuccessListener { productRequest -> searchRequestQueue.add(productRequest.setTag(TAG)) }
+        Tasks.call<Vision.Images.Annotate>(requestCreationExecutor, Callable { createRequest(detectedObject) })
+            .addOnSuccessListener { annotateRequest ->
+                val response = annotateRequest.execute()
+                val similarProducts: List<Result> = response.responses[0].productSearchResults.results
+                val productList = ArrayList<Product>()
+                for (similarProduct in similarProducts) {
+                    val score = similarProduct.score.toString()
+                    val title = similarProduct.product.displayName
+                    productList.add(Product(similarProduct.image, title, score))
+                }
+                listener.invoke(detectedObject,productList)
+            }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Failed to create product search request!", e)
                 // Remove the below dummy code after your own product search backed hooked up.
@@ -61,14 +85,65 @@ class SearchEngine(context: Context) {
 
     companion object {
         private const val TAG = "SearchEngine"
+        private const val CLOUD_VISION_API_KEY = BuildConfig.GOOGLE_CLOUD_API_KEY
+        private const val GOOGLE_CLOUD_PROJECT = BuildConfig.GOOGLE_CLOUD_PROJECT
+        private const val GOOGLE_CLOUD_REGION = BuildConfig.GOOGLE_CLOUD_REGION
+        private const val GOOGLE_CLOUD_VISION_PRODUCT_SET = BuildConfig.GOOGLE_CLOUD_VISION_PRODUCT_SET
+        private const val GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY = BuildConfig.GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY
 
         @Throws(Exception::class)
-        private fun createRequest(searchingObject: DetectedObjectInfo): JsonObjectRequest {
-            val objectImageData = searchingObject.imageData
-                ?: throw Exception("Failed to get object image data!")
+        private fun createRequest(searchingObject: DetectedObjectInfo): Vision.Images.Annotate {
 
-            // Hooks up with your own product search backend here.
-            throw Exception("Hooks up with your own product search backend.")
+            val builder = Vision.Builder(AndroidHttp.newCompatibleTransport(), GsonFactory.getDefaultInstance(), null)
+            builder.setVisionRequestInitializer(VisionRequestInitializer(CLOUD_VISION_API_KEY))
+            val vision: Vision = builder.build()
+
+            val batchAnnotateImagesRequest = BatchAnnotateImagesRequest()
+            batchAnnotateImagesRequest.requests = object : java.util.ArrayList<AnnotateImageRequest?>() {
+                init {
+                    val annotateImageRequest = AnnotateImageRequest()
+
+                    // Add the image
+                    val base64EncodedImage = Image()
+                    val objectImageData = searchingObject.imageData
+                            ?: throw Exception("Failed to get object image data!")
+
+                    // Base64 encode the JPEG
+                    base64EncodedImage.encodeContent(objectImageData)
+                    annotateImageRequest.image = base64EncodedImage
+
+                    // add the features we want
+                    annotateImageRequest.features = object : java.util.ArrayList<Feature>() {
+                        init {
+                            val productSearch = Feature()
+                            productSearch.type = "PRODUCT_SEARCH"
+                            productSearch.maxResults = 5
+                            add(productSearch)
+                        }
+                    }
+
+                    // add the image context
+                    val productSetPath = ProductSetName.format(GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_REGION, GOOGLE_CLOUD_VISION_PRODUCT_SET)
+                    val imageContext = ImageContext()
+                    val productSearchParams = ProductSearchParams()
+                    productSearchParams.productSet = productSetPath
+                    val productSearchCategories = ArrayList<String>()
+                    productSearchCategories.add(GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY)
+                    productSearchParams.productCategories = productSearchCategories
+                    imageContext.productSearchParams = productSearchParams
+                    annotateImageRequest.imageContext = imageContext
+
+                    // Add the list of one thing to the request
+                    add(annotateImageRequest)
+                }
+            }
+            val annotateRequest = vision.images().annotate(batchAnnotateImagesRequest)
+            // Due to a bug: requests to Vision API containing large images fail when GZipped.
+            // Due to a bug: requests to Vision API containing large images fail when GZipped.
+            annotateRequest.disableGZipContent = true
+            Log.d(TAG, "created Cloud Vision request object, sending request")
+
+            return annotateRequest
         }
     }
 }
