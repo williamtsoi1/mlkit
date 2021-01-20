@@ -25,18 +25,10 @@ import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.vision.v1.Vision
 import com.google.api.services.vision.v1.VisionRequestInitializer
-import com.google.api.services.vision.v1.model.AnnotateImageRequest
-import com.google.api.services.vision.v1.model.BatchAnnotateImagesRequest
-import com.google.api.services.vision.v1.model.Feature
-import com.google.api.services.vision.v1.model.Image
-import com.google.api.services.vision.v1.model.ImageContext
-import com.google.api.services.vision.v1.model.ProductSearchParams
-import com.google.api.services.vision.v1.model.Result
+import com.google.api.services.vision.v1.model.*
 import com.google.cloud.vision.v1.ProductSetName
 import com.google.mlkit.md.BuildConfig
 import com.google.mlkit.md.objectdetection.DetectedObjectInfo
-import com.google.protobuf.ByteString
-import java.util.*
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -53,9 +45,8 @@ class SearchEngine(context: Context) {
         listener: (detectedObject: DetectedObjectInfo, productList: List<Product>) -> Unit
     ) {
         // Crops the object image out of the full image is expensive, so do it off the UI thread.
-        Tasks.call<Vision.Images.Annotate>(requestCreationExecutor, Callable { createRequest(detectedObject) })
-            .addOnSuccessListener { annotateRequest ->
-                val response = annotateRequest.execute()
+        Tasks.call<BatchAnnotateImagesResponse>(requestCreationExecutor, Callable { createRequest(detectedObject) })
+            .addOnSuccessListener { response ->
                 val similarProducts: List<Result> = response.responses[0].productSearchResults.results
                 val productList = ArrayList<Product>()
                 for (similarProduct in similarProducts) {
@@ -92,7 +83,7 @@ class SearchEngine(context: Context) {
         private const val GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY = BuildConfig.GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY
 
         @Throws(Exception::class)
-        private fun createRequest(searchingObject: DetectedObjectInfo): Vision.Images.Annotate {
+        private fun createRequest(searchingObject: DetectedObjectInfo): BatchAnnotateImagesResponse {
 
             val builder = Vision.Builder(AndroidHttp.newCompatibleTransport(), GsonFactory.getDefaultInstance(), null)
             builder.setVisionRequestInitializer(VisionRequestInitializer(CLOUD_VISION_API_KEY))
@@ -143,7 +134,7 @@ class SearchEngine(context: Context) {
             annotateRequest.disableGZipContent = true
             Log.d(TAG, "created Cloud Vision request object, sending request")
 
-            return annotateRequest
+            return annotateRequest.execute()
         }
     }
 }
