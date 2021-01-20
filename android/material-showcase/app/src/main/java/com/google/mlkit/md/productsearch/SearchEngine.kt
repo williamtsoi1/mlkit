@@ -47,14 +47,27 @@ class SearchEngine(context: Context) {
         // Crops the object image out of the full image is expensive, so do it off the UI thread.
         Tasks.call<BatchAnnotateImagesResponse>(requestCreationExecutor, Callable { createRequest(detectedObject) })
             .addOnSuccessListener { response ->
-                val similarProducts: List<Result> = response.responses[0].productSearchResults.results
                 val productList = ArrayList<Product>()
-                for (similarProduct in similarProducts) {
-                    val score = similarProduct.score.toString()
-                    val title = similarProduct.product.displayName
-                    productList.add(Product(similarProduct.image, title, score))
+                try {
+                    val similarProducts: List<Result> = response.responses[0].productSearchResults.results
+
+                    for (similarProduct in similarProducts) {
+                        val score = similarProduct.score.toString()
+                        val title = similarProduct.product.displayName
+                        productList.add(Product(similarProduct.image, title, score))
+                    }
                 }
-                listener.invoke(detectedObject,productList)
+                catch (ex: java.lang.Exception) {
+                    Log.e(TAG, "Failed to get productSearchResults", ex)
+                    for (i in 0..7) {
+                        productList.add(
+                                Product(/* imageUrl= */"", "Product title $i", "Product subtitle $i")
+                        )
+                    }
+                }
+                finally {
+                    listener.invoke(detectedObject, productList)
+                }
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Failed to create product search request!", e)
@@ -121,6 +134,32 @@ class SearchEngine(context: Context) {
                     val productSearchCategories = ArrayList<String>()
                     productSearchCategories.add(GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY)
                     productSearchParams.productCategories = productSearchCategories
+
+                    // add bounding box to request
+                    val boundingPoly = BoundingPoly()
+//                    val box = searchingObject.boundingBox
+//                    val vertex1 = Vertex()
+//                    vertex1.x = box.left
+//                    vertex1.y = box.top
+//                    val vertex2 = Vertex()
+//                    vertex2.x = box.right
+//                    vertex2.y = box.top
+//                    val vertex3 = Vertex()
+//                    vertex3.x = box.right
+//                    vertex3.y = box.bottom
+//                    val vertex4 = Vertex()
+//                    vertex4.x = box.left
+//                    vertex4.y = box.bottom
+//
+//                    boundingPoly.vertices = object : java.util.ArrayList<Vertex>() {
+//                        init {
+//                            add(vertex1)
+//                            add(vertex2)
+//                            add(vertex3)
+//                            add(vertex4)
+//                        }
+//                    }
+                    productSearchParams.boundingPoly = boundingPoly
                     imageContext.productSearchParams = productSearchParams
                     annotateImageRequest.imageContext = imageContext
 
