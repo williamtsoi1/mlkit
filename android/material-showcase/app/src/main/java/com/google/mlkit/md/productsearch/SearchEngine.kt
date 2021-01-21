@@ -134,32 +134,6 @@ class SearchEngine(context: Context) {
                     val productSearchCategories = ArrayList<String>()
                     productSearchCategories.add(GOOGLE_CLOUD_VISION_PRODUCT_CATEGORY)
                     productSearchParams.productCategories = productSearchCategories
-
-                    // add bounding box to request
-                    val boundingPoly = BoundingPoly()
-//                    val box = searchingObject.boundingBox
-//                    val vertex1 = Vertex()
-//                    vertex1.x = box.left
-//                    vertex1.y = box.top
-//                    val vertex2 = Vertex()
-//                    vertex2.x = box.right
-//                    vertex2.y = box.top
-//                    val vertex3 = Vertex()
-//                    vertex3.x = box.right
-//                    vertex3.y = box.bottom
-//                    val vertex4 = Vertex()
-//                    vertex4.x = box.left
-//                    vertex4.y = box.bottom
-//
-//                    boundingPoly.vertices = object : java.util.ArrayList<Vertex>() {
-//                        init {
-//                            add(vertex1)
-//                            add(vertex2)
-//                            add(vertex3)
-//                            add(vertex4)
-//                        }
-//                    }
-                    productSearchParams.boundingPoly = boundingPoly
                     imageContext.productSearchParams = productSearchParams
                     annotateImageRequest.imageContext = imageContext
 
